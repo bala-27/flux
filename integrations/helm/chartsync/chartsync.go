@@ -92,27 +92,26 @@ func (chs *ChartChangeSync) Run(stopCh <-chan struct{}, errc chan error, wg *syn
 			select {
 			// ------------------------------------------------------------------------------------
 			case <-ticker.C:
-				fmt.Printf("\n\t... CHARTSYNC at %s\n\n", time.Now().String())
+				chs.logger.Log("info", fmt.Sprintf("Start of chartsync at %s", time.Now().String()))
 				// new commits?
 				if exist, newRev, err = chs.newCommits(); err != nil {
 					chs.logger.Log("error", fmt.Sprintf("Failure during retrieving commits: %#v", err))
-					fmt.Printf("\n\t... CHARTSYNC work FINISHED at %s\n\n", time.Now().String())
+					chs.logger.Log("info", fmt.Sprintf("End of chartsync at %s", time.Now().String()))
 					continue
 				}
 				if !exist {
-					fmt.Printf("\n\t... CHARTSYNC work FINISHED at %s\n\n", time.Now().String())
+					chs.logger.Log("info", fmt.Sprintf("End of chartsync at %s", time.Now().String()))
 					continue
 				}
-				// get namespaces
+
 				ns, err := GetNamespaces(chs.logger, chs.kubeClient)
 				if err != nil {
 					errc <- err
 				}
-				// get charts
 				chartDirs, err := getChartDirs(chs.logger, chs.release.Repo.ChartsSync)
 				if err != nil {
 					chs.logger.Log("error", fmt.Sprintf("Failure to get charts under the charts path: %#v", err))
-					fmt.Printf("\n\t... CHARTSYNC work FINISHED at %s\n\n", time.Now().String())
+					chs.logger.Log("info", fmt.Sprintf("End of chartsync at %s", time.Now().String()))
 					continue
 				}
 				// get fhrs
@@ -121,7 +120,7 @@ func (chs *ChartChangeSync) Run(stopCh <-chan struct{}, errc chan error, wg *syn
 					err = chs.getCustomResources(ns, chart, chartFhrs)
 					if err != nil {
 						chs.logger.Log("error", fmt.Sprintf("Failure during retrieving Custom Resources related to Chart [%s]: %#v", chart, err))
-						fmt.Printf("\n\t... CHARTSYNC work FINISHED at %s\n\n", time.Now().String())
+						chs.logger.Log("info", fmt.Sprintf("End of chartsync at %s", time.Now().String()))
 						continue
 					}
 				}
@@ -132,19 +131,19 @@ func (chs *ChartChangeSync) Run(stopCh <-chan struct{}, errc chan error, wg *syn
 				cancel()
 				if err != nil {
 					chs.logger.Log("error", fmt.Sprintf("Error while establishing upgrade need of releases: %s", err.Error()))
-					fmt.Printf("\n\t... CHARTSYNC work FINISHED at %s\n\n", time.Now().String())
+					chs.logger.Log("info", fmt.Sprintf("End of chartsync at %s", time.Now().String()))
 					continue
 				}
 				// Nothing to release
 				if len(chartsToRelease) == 0 {
 					chs.lastCheckedRevision = newRev
-					fmt.Printf("\n\t... CHARTSYNC work FINISHED at %s\n\n", time.Now().String())
+					chs.logger.Log("info", fmt.Sprintf("End of chartsync at %s", time.Now().String()))
 					continue
 				}
 
 				if err = chs.releaseCharts(chartsToRelease, chartFhrs); err != nil {
 					chs.logger.Log("error", fmt.Sprintf("Failure to release Chart(s): %#v", err))
-					fmt.Printf("\n\t... CHARTSYNC work FINISHED at %s\n\n", time.Now().String())
+					chs.logger.Log("info", fmt.Sprintf("End of chartsync at %s", time.Now().String()))
 					continue
 				}
 				// All went well, so we shall make the repo with the last checked commit up to date
@@ -156,12 +155,12 @@ func (chs *ChartChangeSync) Run(stopCh <-chan struct{}, errc chan error, wg *syn
 				if err != nil {
 					errm := fmt.Errorf("Failure while pulling repo: %#v", err)
 					chs.logger.Log("error", errm.Error())
-					fmt.Printf("\n\t... CHARTSYNC work FINISHED at %s\n\n", time.Now().String())
+					chs.logger.Log("info", fmt.Sprintf("End of chartsync at %s", time.Now().String()))
 					continue
 				}
 				chs.logger.Log("info", "Pulled repo")
 				chs.lastCheckedRevision = newRev
-				fmt.Printf("\n\t... CHARTSYNC work FINISHED at %s\n\n", time.Now().String())
+				chs.logger.Log("info", fmt.Sprintf("End of chartsync at %s", time.Now().String()))
 			// ------------------------------------------------------------------------------------
 			case <-stopCh:
 				chs.logger.Log("stopping", "true")
@@ -323,7 +322,6 @@ func (chs *ChartChangeSync) releaseCharts(chartsToRelease []string, chartFhrs ma
 		for _, fhr := range fhrs {
 			rlsName := chartrelease.GetReleaseName(fhr)
 
-			chs.logger.Log("info", "INSTALLING")
 			opts := chartrelease.InstallOptions{DryRun: false}
 			_, err = chs.release.Install(checkout, rlsName, fhr, "UPDATE", opts)
 			if err != nil {

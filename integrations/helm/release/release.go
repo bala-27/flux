@@ -79,14 +79,27 @@ func GetReleaseName(fhr ifv1.FluxHelmRelease) string {
 	return releaseName
 }
 
+// GetDeployedRelease ... returns a release with Deployed status
+func (r *Release) GetDeployedRelease(name string) (*hapi_release.Release, error) {
+
+	rls, err := r.HelmClient.ReleaseContent(name)
+	if err != nil {
+		return nil, err
+	}
+	if rls.Release.Info.Status.GetCode() == 1 {
+		return rls.GetRelease(), nil
+	}
+	return nil, nil
+}
+
 // Exists ... detects if a particular Chart release exists
 // 		release name must match regex ^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])+$
 // Get ... detects if a particular Chart release exists
 // 		release name must match regex ^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])+$
 func (r *Release) Exists(name string) (bool, error) {
 	r.Lock()
+	defer r.Unlock()
 	rls, err := r.HelmClient.ReleaseContent(name)
-	r.Unlock()
 
 	if err != nil {
 		//r.logger.Log("debug", fmt.Sprintf("Getting release (%s): %v", name, err))
@@ -150,7 +163,7 @@ func (r *Release) canDelete(name string) (bool, error) {
 // Install ... performs Chart release. Depending on the release type, this is either a new release,
 // or an upgrade of an existing one
 func (r *Release) Install(checkout *helmgit.Checkout, releaseName string, fhr ifv1.FluxHelmRelease, releaseType ReleaseType, opts InstallOptions) (hapi_release.Release, error) {
-	r.logger.Log("info", fmt.Sprintf("releaseName= %s, releaseType=%s", releaseName, releaseType))
+	r.logger.Log("info", fmt.Sprintf("releaseName= %s, releaseType=%s, install options: %+v", releaseName, releaseType, opts))
 
 	chartPath := fhr.Spec.ChartGitPath
 	if chartPath == "" {
@@ -258,6 +271,7 @@ func (r *Release) Delete(name string) error {
 }
 
 // GetCurrentWithDate provides Chart releases (stored in tiller ConfigMaps)
+// (Tamara: The method is not currently used. I am leaving it here as it will come handy for display on the UI)
 //		output:
 //						map[namespace][release name] = time.Unix() [int64]
 func (r *Release) GetCurrentWithDate() (map[string][]DeployInfo, error) {
@@ -270,16 +284,12 @@ func (r *Release) GetCurrentWithDate() (map[string][]DeployInfo, error) {
 	relsM := make(map[string][]DeployInfo)
 	var nameTime []DeployInfo
 
-	fmt.Println("GETTING CHART RELEASES")
 	for _, r := range response.GetReleases() {
 		ns := r.Namespace
 		nameTime = relsM[ns]
 		secs := r.Info.GetLastDeployed().Seconds
 
 		nameTime = append(nameTime, DeployInfo{Name: r.Name, Deployed: secs})
-		//fmt.Printf("\n----------\n\t[[%s]] %d ==> %s ... %d\n", ns, i, r.Name, secs)
-		//fmt.Printf("\tcurrent number of nameTime elems = %d\n----------\n", len(nameTime))
-
 		relsM[ns] = nameTime
 	}
 	return relsM, nil
