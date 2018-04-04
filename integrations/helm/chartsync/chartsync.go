@@ -44,7 +44,6 @@ type ChartChangeSync struct {
 	ifClient            ifclientset.Clientset
 	release             *chartrelease.Release
 	lastCheckedRevision string
-	//sync.RWMutex
 }
 
 func New(
@@ -315,8 +314,6 @@ func (chs *ChartChangeSync) releaseCharts(chartsToRelease []string, chartFhrs ma
 	checkout := chs.release.Repo.ChartsSync
 
 	for _, chart := range chartsToRelease {
-		fmt.Printf("\t... chart %s\n", chart)
-
 		var err error
 		fhrs := chartFhrs[chart]
 		for _, fhr := range fhrs {

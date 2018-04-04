@@ -102,7 +102,6 @@ func (r *Release) Exists(name string) (bool, error) {
 	rls, err := r.HelmClient.ReleaseContent(name)
 
 	if err != nil {
-		//r.logger.Log("debug", fmt.Sprintf("Getting release (%s): %v", name, err))
 		return false, err
 	}
 	/*

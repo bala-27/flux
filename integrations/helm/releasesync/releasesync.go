@@ -1,6 +1,7 @@
 /*
-When a Chart release is deleted/upgraded/created manually, the cluster gets out of sync
-with the prescribed state defined in the get repo.
+When a Chart release is manually deleted/upgraded/created, the cluster gets out of sync
+with the prescribed state defined by FluxHelmRelease custom resources. The releasesync package
+attemps to bring the cluster back to the prescribed state.
 */
 package releasesync
 
@@ -44,8 +45,6 @@ type ReleaseFhr struct {
 	Fhr     ifv1.FluxHelmRelease
 }
 
-// ReleaseChangeSync will become a receiver, that contains
-//
 type ReleaseChangeSync struct {
 	logger log.Logger
 	chartsync.Polling
@@ -292,7 +291,6 @@ func (rs *ReleaseChangeSync) deletedReleasesToSync(
 	return nil
 }
 
-// releasesToSync gathers all releases that need syncing
 func (rs *ReleaseChangeSync) releasesToSync(ctx context.Context) (map[string][]chartRelease, error) {
 	ns, err := chartsync.GetNamespaces(rs.logger, rs.kubeClient)
 	if err != nil {
