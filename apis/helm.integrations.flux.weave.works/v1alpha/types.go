@@ -30,7 +30,7 @@ type FluxHelmReleaseSpec struct {
 //		Name  ... parameter name; if missing this parameter will be discarded
 //		Value ...
 
-// HelmChartParam ... user customization of Chart parameterized values
+// HelmChartParam for user customization of Chart parameterized values
 type HelmChartParam struct {
 	Name  string `json:"name"`
 	Value string `json:"value"`
