@@ -31,7 +31,7 @@ import (
 
 const (
 	CustomResourceKind = "FluxHelmRelease"
-	syncDelay          = 60
+	syncDelay          = 90
 )
 
 type ReleaseFhr struct {
@@ -82,7 +82,6 @@ func (rs *ReleaseChangeSync) Run(stopCh <-chan struct{}, errc chan error, wg *sy
 	go func() {
 		defer runtime.HandleCrash()
 		defer wg.Done()
-		defer rs.release.Repo.ReleasesSync.Cleanup()
 
 		time.Sleep(syncDelay * time.Second)
 
@@ -93,35 +92,47 @@ func (rs *ReleaseChangeSync) Run(stopCh <-chan struct{}, errc chan error, wg *sy
 			select {
 			case <-ticker.C:
 				rs.logger.Log("info", fmt.Sprint("Start of releasesync"))
-				ctx, cancel := context.WithTimeout(context.Background(), helmgit.DefaultCloneTimeout)
-				relsToSync, err := rs.releasesToSync(ctx)
-				cancel()
+				syncNeeded, err := rs.doReleaseChangeSync()
 				if err != nil {
-					rs.logger.Log("error", fmt.Sprintf("Failure to get info about manual chart release changes: %#v", err))
+					rs.logger.Log("error", fmt.Sprintf("Failure to do manual release sync: %#v", err))
 					rs.logger.Log("info", fmt.Sprint("End of releasesync"))
-					continue
 				}
-
-				if len(relsToSync) == 0 {
+				if !syncNeeded {
 					rs.logger.Log("info", fmt.Sprint("No manual changes of Chart releases"))
-					rs.logger.Log("info", fmt.Sprint("End of releasesync"))
-					continue
-				}
-
-				// sync Chart releases
-				ctx, cancel = context.WithTimeout(context.Background(), helmgit.DefaultCloneTimeout)
-				err = rs.sync(ctx, relsToSync)
-				cancel()
-				if err != nil {
-					rs.logger.Log("error", fmt.Sprintf("Failure to sync cluster after manual chart release changes: %#v", err))
 				}
 				rs.logger.Log("info", fmt.Sprint("End of releasesync"))
+				continue
 			case <-stopCh:
 				rs.logger.Log("stopping", "true")
 				break
 			}
 		}
 	}()
+}
+
+// ReleaseChangeSync returns the cluster to the state dictated by Custom Resources
+// after manual Chart release(s)
+func (rs *ReleaseChangeSync) doReleaseChangeSync() (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), helmgit.DefaultCloneTimeout)
+	relsToSync, err := rs.releasesToSync(ctx)
+	cancel()
+	if err != nil {
+		err := fmt.Errorf("Failure to get info about manual chart release changes: %#v", err)
+		return false, err
+	}
+	if len(relsToSync) == 0 {
+		return false, nil
+	}
+	// sync Chart releases
+	ctx, cancel = context.WithTimeout(context.Background(), helmgit.DefaultCloneTimeout)
+	err = rs.sync(ctx, relsToSync)
+	cancel()
+	if err != nil {
+		err := fmt.Errorf("Failure to sync cluster after manual chart release changes: %#v", err)
+		return false, err
+	}
+
+	return true, nil
 }
 
 func (rs *ReleaseChangeSync) getNSCustomResources(ns string) (*ifv1.FluxHelmReleaseList, error) {

@@ -76,8 +76,6 @@ func (chs *ChartChangeSync) Run(stopCh <-chan struct{}, errc chan error, wg *syn
 		defer runtime.HandleCrash()
 		defer wg.Done()
 
-		defer chs.release.Repo.ChartsSync.Cleanup()
-
 		var exist bool
 		var newRev string
 		var err error
@@ -89,7 +87,6 @@ func (chs *ChartChangeSync) Run(stopCh <-chan struct{}, errc chan error, wg *syn
 			select {
 			case <-ticker.C:
 				chs.logger.Log("info", fmt.Sprint("Start of chartsync"))
-				// new commits?
 				if exist, newRev, err = chs.newCommits(); err != nil {
 					chs.logger.Log("error", fmt.Sprintf("Failure during retrieving commits: %#v", err))
 					chs.logger.Log("info", fmt.Sprint("End of chartsync"))
@@ -110,7 +107,6 @@ func (chs *ChartChangeSync) Run(stopCh <-chan struct{}, errc chan error, wg *syn
 					chs.logger.Log("info", fmt.Sprint("End of chartsync"))
 					continue
 				}
-				// get fhrs
 				chartFhrs := make(map[string][]ifv1.FluxHelmRelease)
 				for _, chart := range chartDirs {
 					err = chs.getCustomResources(ns, chart, chartFhrs)
@@ -121,7 +117,6 @@ func (chs *ChartChangeSync) Run(stopCh <-chan struct{}, errc chan error, wg *syn
 					}
 				}
 
-				// compare manifests and release if required
 				ctx, cancel := context.WithTimeout(context.Background(), helmgit.DefaultCloneTimeout)
 				chartsToRelease, err := chs.releaseNeeded(ctx, newRev, chartDirs, chartFhrs)
 				cancel()
@@ -130,7 +125,6 @@ func (chs *ChartChangeSync) Run(stopCh <-chan struct{}, errc chan error, wg *syn
 					chs.logger.Log("info", fmt.Sprint("End of chartsync"))
 					continue
 				}
-				// Nothing to release
 				if len(chartsToRelease) == 0 {
 					chs.lastCheckedRevision = newRev
 					chs.logger.Log("info", fmt.Sprint("End of chartsync"))
@@ -301,11 +295,10 @@ func (chs *ChartChangeSync) getCustomResources(namespaces []string, chart string
 	return nil
 }
 
-// releaseCharts release a Chart if required
+// releaseCharts upgrades releases with changed Charts
 //		input:
 //					chartD ... provides chart name and its directory information
 //					fhr ...... provides chart name and all Custom Resources associated with this chart
-//		does a dry run and compares the manifests (and value file?) If differences => release)
 func (chs *ChartChangeSync) releaseCharts(chartsToRelease []string, chartFhrs map[string][]ifv1.FluxHelmRelease) error {
 	checkout := chs.release.Repo.ChartsSync
 
@@ -316,9 +309,9 @@ func (chs *ChartChangeSync) releaseCharts(chartsToRelease []string, chartFhrs ma
 			rlsName := chartrelease.GetReleaseName(fhr)
 
 			opts := chartrelease.InstallOptions{DryRun: false}
-			_, err = chs.release.Install(checkout, rlsName, fhr, "UPDATE", opts)
+			_, err = chs.release.Install(checkout, rlsName, fhr, chartrelease.UpgradeAction, opts)
 			if err != nil {
-				chs.logger.Log("info", fmt.Sprintf("Error during dry run upgrade of release of [%s]: %s. Skipping.", rlsName, err.Error()))
+				chs.logger.Log("info", fmt.Sprintf("Error to do upgrade of release of [%s]: %s. Skipping.", rlsName, err.Error()))
 				// TODO: collect errors and return them after looping through all - ?
 				continue
 			}

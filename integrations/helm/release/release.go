@@ -269,7 +269,6 @@ func (r *Release) Delete(name string) error {
 }
 
 // GetCurrentWithDate provides Chart releases (stored in tiller ConfigMaps)
-// (Tamara: The method is not currently used. I am leaving it here as it will come handy for display on the UI)
 //		output:
 //						map[namespace][release name] = nil
 func (r *Release) GetCurrent() (map[string][]DeployInfo, error) {
