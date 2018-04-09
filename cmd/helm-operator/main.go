@@ -231,41 +231,6 @@ func main() {
 	}
 	mainLogger.Log("info", "Repo cloned")
 
-	// 		Chart releases sync due to pure Charts changes ------------------------------------
-	checkoutCh := git.NewCheckout(log.With(logger, "component", "git"), gitRemoteConfigCh, gitAuth)
-	defer checkoutCh.Cleanup()
-
-	// If cloning not immediately possible, we wait until it is -----------------------------
-	for {
-		mainLogger.Log("info", "Cloning repo ...")
-		ctx, cancel := context.WithTimeout(context.Background(), git.DefaultCloneTimeout)
-		err = checkoutCh.Clone(ctx, git.ChartsChangesClone)
-		cancel()
-		if err == nil {
-			break
-		}
-		mainLogger.Log("error", fmt.Sprintf("Failed to clone git repo [%s, %s, %s]: %v", gitRemoteConfigCh.URL, gitRemoteConfigCh.Branch, gitRemoteConfigCh.Path, err))
-		time.Sleep(10 * time.Second)
-	}
-	mainLogger.Log("info", "Repo cloned")
-
-	// 		Chart releases sync due to manual chart release changes ------------------------------------
-	checkoutR := git.NewCheckout(log.With(logger, "component", "git"), gitRemoteReleaseCh, gitAuth)
-	defer checkoutR.Cleanup()
-	// If cloning not immediately possible, we wait until it is -----------------------------
-	for {
-		mainLogger.Log("info", "Cloning repo ...")
-		ctx, cancel := context.WithTimeout(context.Background(), git.DefaultCloneTimeout)
-		err = checkoutR.Clone(ctx, git.ReleasesChangesClone)
-		cancel()
-		if err == nil {
-			break
-		}
-		mainLogger.Log("error", fmt.Sprintf("Failed to clone git repo [%s, %s, %s]: %v", gitRemoteConfigCh.URL, gitRemoteConfigCh.Branch, gitRemoteConfigCh.Path, err))
-		time.Sleep(10 * time.Second)
-	}
-	mainLogger.Log("info", "Repo cloned")
-
 	// CUSTOM RESOURCES CACHING SETUP -------------------------------------------------------
 	//				SharedInformerFactory sets up informer, that maps resource type to a cache shared informer.
 	//				operator attaches event handler to the informer and syncs the informer cache
@@ -273,15 +238,16 @@ func main() {
 	// 				Obtain reference to shared index informers for the FluxHelmRelease
 	fhrInformer := ifInformerFactory.Helm().V1alpha().FluxHelmReleases()
 
-	rel := release.New(log.With(logger, "component", "release"), helmClient, checkoutFhr, checkoutCh, checkoutR)
+	rel := release.New(log.With(logger, "component", "release"), helmClient, checkoutFhr)
+	relsync := releasesync.New(log.With(logger, "component", "releasesync"), rel)
 
 	// CHARTS CHANGES SYNC -----------------------------------------------------------------------------
-	chartSync := chartsync.New(log.With(logger, "component", "chartsync"), *chartsSyncInterval, *chartsSyncTimeout, *kubeClient, *ifClient, fhrInformer, rel)
+	chartSync := chartsync.New(log.With(logger, "component", "chartsync"), *chartsSyncInterval, *chartsSyncTimeout, *kubeClient, *ifClient, rel, *relsync)
 	chartSync.Run(shutdown, errc, shutdownWg)
 
 	// MANUAL CHART RELEASES SYNC -----------------------------------------------------------------------------
-	releaseSync := releasesync.New(log.With(logger, "component", "releasesync"), *chartsSyncInterval, *chartsSyncTimeout, *kubeClient, *ifClient, rel)
-	releaseSync.Run(shutdown, errc, shutdownWg)
+	//releaseSync := releasesync.New(log.With(logger, "component", "releasesync"), *chartsSyncInterval, *chartsSyncTimeout, *kubeClient, *ifClient, rel)
+	//releaseSync.Run(shutdown, errc, shutdownWg)
 
 	// OPERATOR - CUSTOM RESOURCES CHANGE SYNC ----------------------------------------------
 	opr := operator.New(log.With(logger, "component", "operator"), kubeClient, fhrInformer, rel)
