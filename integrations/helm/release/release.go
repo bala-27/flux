@@ -39,6 +39,7 @@ type Release struct {
 
 type repo struct {
 	ConfigSync *helmgit.Checkout
+	ChartSync  *helmgit.Checkout
 }
 
 type DeployInfo struct {
@@ -51,9 +52,10 @@ type InstallOptions struct {
 }
 
 // New creates a new Release instance
-func New(logger log.Logger, helmClient *k8shelm.Client, configCheckout *helmgit.Checkout) *Release {
+func New(logger log.Logger, helmClient *k8shelm.Client, configCheckout *helmgit.Checkout, chartsCheckout *helmgit.Checkout) *Release {
 	repo := repo{
 		ConfigSync: configCheckout,
+		ChartSync:  chartsCheckout,
 	}
 	r := &Release{
 		logger:     logger,

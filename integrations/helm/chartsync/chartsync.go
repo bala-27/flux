@@ -36,6 +36,11 @@ type Polling struct {
 	Timeout  time.Duration
 }
 
+type Clients struct {
+	KubeClient kubernetes.Clientset
+	IfClient   ifclientset.Clientset
+}
+
 type ChartChangeSync struct {
 	logger log.Logger
 	Polling
@@ -47,14 +52,14 @@ type ChartChangeSync struct {
 }
 
 func New(
-	logger log.Logger, syncInterval time.Duration, syncTimeout time.Duration,
-	kubeClient kubernetes.Clientset,
-	ifClient ifclientset.Clientset,
+	logger log.Logger,
+	polling Polling,
+	clients Clients,
 	release *chartrelease.Release,
 	relsync releasesync.ReleaseChangeSync) *ChartChangeSync {
 
 	lastCheckedRevision := ""
-	gitRef, err := release.Repo.ConfigSync.GetRevision()
+	gitRef, err := release.Repo.ChartSync.GetRevision()
 	if err != nil {
 		// we shall try again later
 	}
@@ -62,9 +67,9 @@ func New(
 
 	return &ChartChangeSync{
 		logger:              logger,
-		Polling:             Polling{Interval: syncInterval, Timeout: syncTimeout},
-		kubeClient:          kubeClient,
-		ifClient:            ifClient,
+		Polling:             polling,
+		kubeClient:          clients.KubeClient,
+		ifClient:            clients.IfClient,
 		release:             release,
 		relsync:             relsync,
 		lastCheckedRevision: lastCheckedRevision,
@@ -137,7 +142,7 @@ func (chs *ChartChangeSync) DoChartChangeSync(ns []string) (bool, error) {
 		return false, nil
 	}
 
-	chartDirs, err := getChartDirs(chs.logger, chs.release.Repo.ConfigSync)
+	chartDirs, err := getChartDirs(chs.logger, chs.release.Repo.ChartSync)
 	if err != nil {
 		return false, fmt.Errorf("Failure to get charts under the charts path: %#v", err)
 	}
@@ -154,7 +159,7 @@ func (chs *ChartChangeSync) DoChartChangeSync(ns []string) (bool, error) {
 	chartsToRelease, err := chs.releaseNeeded(ctx, newRev, chartDirs, chartFhrs)
 	cancel()
 	if err != nil {
-		return false, fmt.Errorf("Error while establishing upgrade need of releases: %#v", err)
+		return false, fmt.Errorf("Failure while establishing upgrade need of releases: %#v", err)
 	}
 	if len(chartsToRelease) == 0 {
 		chs.lastCheckedRevision = newRev
@@ -228,7 +233,7 @@ func getChartDirs(logger log.Logger, checkout *helmgit.Checkout) ([]string, erro
 func (chs *ChartChangeSync) newCommits() (bool, string, error) {
 	chs.logger.Log("info", "Getting new commits")
 
-	checkout := chs.release.Repo.ConfigSync
+	checkout := chs.release.Repo.ChartSync
 
 	chs.logger.Log("info", fmt.Sprintf("Repo dir = %s", checkout.Dir))
 
@@ -248,18 +253,13 @@ func (chs *ChartChangeSync) newCommits() (bool, string, error) {
 	err := checkout.Pull(ctx)
 	cancel()
 	if err != nil {
-		errm := fmt.Errorf("Failure while pulling repo: %#v", err)
-		chs.logger.Log("error", errm.Error())
-		return false, "", errm
+		return false, "", fmt.Errorf("Failure while pulling repo: %#v", err)
 	}
-	chs.logger.Log("info", "Pulled repo")
 
 	// get latest revision
 	newRev, err := checkout.GetRevision()
 	if err != nil {
-		errm := fmt.Errorf("Failure while getting repo revision: %s", err.Error())
-		chs.logger.Log("error", errm.Error())
-		return false, "", errm
+		return false, "", fmt.Errorf("Failure while getting repo revision: %s", err.Error())
 	}
 	chs.logger.Log("info", fmt.Sprintf("Got revision %s", newRev.String()))
 
@@ -311,7 +311,7 @@ func (chs *ChartChangeSync) getCustomResources(namespaces []string, chart string
 //					chartD ... provides chart name and its directory information
 //					fhr ...... provides chart name and all Custom Resources associated with this chart
 func (chs *ChartChangeSync) releaseCharts(chartsToRelease []string, chartFhrs map[string][]ifv1.FluxHelmRelease) error {
-	checkout := chs.release.Repo.ConfigSync
+	checkout := chs.release.Repo.ChartSync
 
 	for _, chart := range chartsToRelease {
 		var err error
@@ -343,7 +343,7 @@ func (chs *ChartChangeSync) releaseNeeded(ctx context.Context, newRev string, ch
 	var fhrs []ifv1.FluxHelmRelease
 
 	revRange := fmt.Sprintf("%s..%s", chs.lastCheckedRevision, newRev)
-	dir := fmt.Sprintf("%s/%s", chs.release.Repo.ConfigSync.Dir, chs.release.Repo.ConfigSync.Config.Path)
+	dir := fmt.Sprintf("%s/%s", chs.release.Repo.ChartSync.Dir, chs.release.Repo.ChartSync.Config.Path)
 
 	for _, chart := range charts {
 		chs.logger.Log("debug", fmt.Sprintf("Testing if release needed for Chart [%s]", chart))

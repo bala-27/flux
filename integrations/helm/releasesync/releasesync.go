@@ -120,7 +120,7 @@ func (rs *ReleaseChangeSync) shouldUpgrade(currRel *hapi_release.Release, fhr if
 	// Get the desired release state
 	opts := chartrelease.InstallOptions{DryRun: true}
 	tempRelName := strings.Join([]string{currRel.GetName(), "temp"}, "-")
-	desRel, err := rs.release.Install(rs.release.Repo.ConfigSync, tempRelName, fhr, "CREATE", opts)
+	desRel, err := rs.release.Install(rs.release.Repo.ChartSync, tempRelName, fhr, "CREATE", opts)
 	if err != nil {
 		return false, err
 	}
@@ -256,7 +256,7 @@ func (rs *ReleaseChangeSync) releasesToSync(ctx context.Context, ifClient ifclie
 
 func (rs *ReleaseChangeSync) sync(ctx context.Context, releases map[string][]chartRelease) error {
 
-	checkout := rs.release.Repo.ConfigSync
+	checkout := rs.release.Repo.ChartSync
 	opts := chartrelease.InstallOptions{DryRun: false}
 	for ns, relsToProcess := range releases {
 		for _, chr := range relsToProcess {
