@@ -74,6 +74,13 @@ func (rs *ReleaseChangeSync) DoReleaseChangeSync(ifClient ifclientset.Clientset,
 		return false, nil
 	}
 	// sync Chart releases
+	ctx, cancel = context.WithTimeout(context.Background(), helmgit.DefaultPullTimeout)
+	err = rs.release.Repo.ChartSync.Pull(ctx)
+	cancel()
+	if err != nil {
+		return false, fmt.Errorf("Failure while pulling repo: %#v", err)
+	}
+
 	ctx, cancel = context.WithTimeout(context.Background(), helmgit.DefaultCloneTimeout)
 	err = rs.sync(ctx, relsToSync)
 	cancel()

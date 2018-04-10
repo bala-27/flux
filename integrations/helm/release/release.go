@@ -172,15 +172,6 @@ func (r *Release) Install(checkout *helmgit.Checkout, releaseName string, fhr if
 		namespace = "default"
 	}
 
-	// ctx, cancel := context.WithTimeout(context.Background(), helmgit.DefaultCloneTimeout)
-	// err := checkout.Pull(ctx)
-	// cancel()
-	// if err != nil {
-	// 	errm := fmt.Errorf("Failure to do git pull: %#v", err)
-	// 	r.logger.Log("error", errm.Error())
-	// 	return hapi_release.Release{}, errm
-	// }
-
 	chartDir := filepath.Join(checkout.Dir, checkout.Config.Path, chartPath)
 
 	rawVals, err := collectValues(fhr.Spec.Values)
